@@ -2,7 +2,6 @@
 
 import {
   budgetRanges,
-  contactEmail,
   projectTypes,
   timelineOptions,
   type ContactFormState,
@@ -56,18 +55,9 @@ function isValidUrl(value: string) {
   }
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function buildEmailText(enquiry: Enquiry) {
   return [
-    "New project enquiry",
+    "New Portfolio Project Enquiry",
     "",
     `Name: ${enquiry.name}`,
     `Email: ${enquiry.email}`,
@@ -81,46 +71,6 @@ function buildEmailText(enquiry: Enquiry) {
     "Project details:",
     enquiry.details,
   ].join("\n");
-}
-
-function buildEmailHtml(enquiry: Enquiry) {
-  const rows = [
-    ["Name", enquiry.name],
-    ["Email", enquiry.email],
-    ["Company or project", enquiry.company],
-    ["What needs built", enquiry.need],
-    ["Project type", enquiry.projectType],
-    ["Current URL", enquiry.url || "Not provided"],
-    ["Estimated budget", enquiry.budget],
-    ["Desired timeline", enquiry.timeline],
-  ];
-
-  return `
-    <h1>New project enquiry</h1>
-    <table cellpadding="8" cellspacing="0" style="border-collapse:collapse">
-      <tbody>
-        ${rows
-          .map(
-            ([label, value]) =>
-              `<tr><th align="left">${escapeHtml(label)}</th><td>${escapeHtml(
-                value,
-              )}</td></tr>`,
-          )
-          .join("")}
-      </tbody>
-    </table>
-    <h2>Project details</h2>
-    <p>${escapeHtml(enquiry.details).replaceAll("\n", "<br />")}</p>
-  `;
-}
-
-function buildMailtoHref(enquiry: Enquiry) {
-  const subject = `Project enquiry: ${enquiry.company}`;
-  const body = buildEmailText(enquiry);
-
-  return `mailto:${contactEmail}?subject=${encodeURIComponent(
-    subject,
-  )}&body=${encodeURIComponent(body)}`;
 }
 
 function validate(formData: FormData) {
@@ -186,13 +136,17 @@ function validate(formData: FormData) {
   return { errors, enquiry: enquiry as Enquiry };
 }
 
-async function sendWithResend(enquiry: Enquiry) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.CONTACT_FROM_EMAIL;
+type Web3FormsResponse = {
+  success?: boolean;
+  message?: string;
+};
 
-  if (!apiKey || !from) {
+async function sendWithWeb3Forms(enquiry: Enquiry) {
+  const accessKey = process.env.WEB3FORMS_ACCESS_KEY;
+
+  if (!accessKey) {
     if (process.env.NODE_ENV !== "production") {
-      console.info("Contact form email delivery is not configured.", {
+      console.info("Web3Forms delivery is not configured.", {
         projectType: enquiry.projectType,
         budget: enquiry.budget,
         timeline: enquiry.timeline,
@@ -206,25 +160,40 @@ async function sendWithResend(enquiry: Enquiry) {
     };
   }
 
-  const response = await fetch("https://api.resend.com/emails", {
+  const response = await fetch("https://api.web3forms.com/submit", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from,
-      to: [contactEmail],
-      reply_to: enquiry.email,
-      subject: `Project enquiry: ${enquiry.company}`,
-      text: buildEmailText(enquiry),
-      html: buildEmailHtml(enquiry),
+      access_key: accessKey,
+      subject: "New Portfolio Project Enquiry",
+      from_name: "Saheed Alpha Mansaray Portfolio",
+      email: enquiry.email,
+      replyto: enquiry.email,
+      name: enquiry.name,
+      "company or project name": enquiry.company,
+      "what do you need built": enquiry.need,
+      "project type": enquiry.projectType,
+      "current URL": enquiry.url || "Not provided",
+      budget: enquiry.budget,
+      timeline: enquiry.timeline,
+      "project details": enquiry.details,
+      message: buildEmailText(enquiry),
     }),
   });
 
+  const data = (await response.json().catch(() => null)) as
+    | Web3FormsResponse
+    | null;
+
   return {
-    ok: response.ok,
-    reason: response.ok ? ("sent" as const) : ("provider-error" as const),
+    ok: response.ok && data?.success === true,
+    reason:
+      response.ok && data?.success === true
+        ? ("sent" as const)
+        : ("provider-error" as const),
   };
 }
 
@@ -254,7 +223,7 @@ export async function submitProjectEnquiry(
   }
 
   try {
-    const result = await sendWithResend(enquiry);
+    const result = await sendWithWeb3Forms(enquiry);
 
     if (result.ok) {
       return {
@@ -269,26 +238,23 @@ export async function submitProjectEnquiry(
       return {
         status: "error",
         message:
-          "This form is validated, but email delivery is not configured yet. Use the email draft below so the enquiry is not lost.",
+          "This form is validated, but Web3Forms is not configured yet. Add WEB3FORMS_ACCESS_KEY in Vercel and try again.",
         errors: {},
-        mailtoHref: buildMailtoHref(enquiry),
       };
     }
 
     return {
       status: "error",
       message:
-        "The email provider did not accept the message. Please use the email draft below instead.",
+        "Web3Forms did not confirm the submission. Please check the access key and try again.",
       errors: {},
-      mailtoHref: buildMailtoHref(enquiry),
     };
   } catch {
     return {
       status: "error",
       message:
-        "The form could not reach the email provider. Please use the email draft below instead.",
+        "The form could not reach Web3Forms. Please try again in a moment.",
       errors: {},
-      mailtoHref: buildMailtoHref(enquiry),
     };
   }
 }

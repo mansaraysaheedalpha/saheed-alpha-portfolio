@@ -15,8 +15,8 @@ export function Header() {
             className="group flex items-center gap-2.5"
             aria-label="Alpha Mansaray homepage"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-400/[0.07] text-[15px] font-semibold text-blue-400 transition-colors group-hover:border-blue-400/35 group-hover:bg-blue-400/[0.12]">
-              AM
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-400/[0.07] text-[13px] font-semibold text-blue-400 transition-colors group-hover:border-blue-400/35 group-hover:bg-blue-400/[0.12]">
+              SAM
             </span>
 
             <span className="flex flex-col">
