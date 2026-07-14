@@ -46,7 +46,7 @@ export type ContactFormState = {
   status: "idle" | "success" | "error";
   message: string;
   errors: Partial<Record<FormField, string>>;
-  mailtoHref?: string;
+  web3FormsPayload?: Record<string, string>;
 };
 
 export type Enquiry = {

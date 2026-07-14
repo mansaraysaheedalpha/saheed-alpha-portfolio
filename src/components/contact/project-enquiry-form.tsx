@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { type FormEvent, useState } from "react";
 
 import {
   budgetRanges,
@@ -113,11 +113,69 @@ function SelectField({
 }
 
 export function ProjectEnquiryForm() {
-  const [state, formAction, pending] = useActionState(
-    submitProjectEnquiry,
+  const [state, setState] = useState<ContactFormState>(
     initialContactFormState,
   );
+  const [pending, setPending] = useState(false);
   const status = pending ? "submitting" : state.status;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    setPending(true);
+    setState(initialContactFormState);
+
+    try {
+      const validatedState = await submitProjectEnquiry(state, formData);
+
+      if (!validatedState.web3FormsPayload) {
+        setState(validatedState);
+        return;
+      }
+
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(validatedState.web3FormsPayload),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        success?: boolean;
+      } | null;
+
+      if (response.ok && data?.success === true) {
+        form.reset();
+        setState({
+          status: "success",
+          message:
+            "Your project details were sent. I will review them and respond with the clearest next step.",
+          errors: {},
+        });
+        return;
+      }
+
+      setState({
+        status: "error",
+        message:
+          "Web3Forms did not confirm the submission. Please check the access key and try again.",
+        errors: {},
+      });
+    } catch {
+      setState({
+        status: "error",
+        message:
+          "The form could not reach Web3Forms. Please try again in a moment.",
+        errors: {},
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <section className="border border-white/[0.1] bg-white/[0.035] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-8 lg:p-10">
@@ -130,7 +188,7 @@ export function ProjectEnquiryForm() {
         </h2>
       </div>
 
-      <form action={formAction} noValidate className="grid gap-6">
+      <form onSubmit={handleSubmit} noValidate className="grid gap-6">
         <div className="sr-only">
           <label htmlFor="website">Website</label>
           <input
@@ -264,14 +322,6 @@ export function ProjectEnquiryForm() {
           ].join(" ")}
         >
           {status === "submitting" ? "Sending project details..." : state.message}
-          {state.mailtoHref && (
-            <a
-              href={state.mailtoHref}
-              className="ml-2 inline-flex font-medium text-white underline decoration-white/30 underline-offset-4 transition-colors duration-200 hover:decoration-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-400"
-            >
-              Open email draft
-            </a>
-          )}
         </div>
 
         <button

@@ -136,67 +136,24 @@ function validate(formData: FormData) {
   return { errors, enquiry: enquiry as Enquiry };
 }
 
-type Web3FormsResponse = {
-  success?: boolean;
-  message?: string;
-};
-
-async function sendWithWeb3Forms(enquiry: Enquiry) {
-  const accessKey = process.env.WEB3FORMS_ACCESS_KEY;
-
-  if (!accessKey) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("Web3Forms delivery is not configured.", {
-        projectType: enquiry.projectType,
-        budget: enquiry.budget,
-        timeline: enquiry.timeline,
-        hasUrl: Boolean(enquiry.url),
-      });
-    }
-
-    return {
-      ok: false,
-      reason: "missing-configuration" as const,
-    };
-  }
-
-  const response = await fetch("https://api.web3forms.com/submit", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      access_key: accessKey,
-      subject: "New Portfolio Project Enquiry",
-      from_name: "Saheed Alpha Mansaray Portfolio",
-      email: enquiry.email,
-      replyto: enquiry.email,
-      name: enquiry.name,
-      "company or project name": enquiry.company,
-      "what do you need built": enquiry.need,
-      "project type": enquiry.projectType,
-      "current URL": enquiry.url || "Not provided",
-      budget: enquiry.budget,
-      timeline: enquiry.timeline,
-      "project details": enquiry.details,
-      message: buildEmailText(enquiry),
-    }),
-  });
-
-  const data = (await response.json().catch(() => null)) as
-    | Web3FormsResponse
-    | null;
-
+function buildWeb3FormsPayload(enquiry: Enquiry, accessKey: string) {
   return {
-    ok: response.ok && data?.success === true,
-    reason:
-      response.ok && data?.success === true
-        ? ("sent" as const)
-        : ("provider-error" as const),
+    access_key: accessKey,
+    subject: "New Portfolio Project Enquiry",
+    from_name: "Saheed Alpha Mansaray Portfolio",
+    email: enquiry.email,
+    replyto: enquiry.email,
+    name: enquiry.name,
+    "company or project name": enquiry.company,
+    "what do you need built": enquiry.need,
+    "project type": enquiry.projectType,
+    "current URL": enquiry.url || "Not provided",
+    budget: enquiry.budget,
+    timeline: enquiry.timeline,
+    "project details": enquiry.details,
+    message: buildEmailText(enquiry),
   };
 }
-
 export async function submitProjectEnquiry(
   _previousState: ContactFormState,
   formData: FormData,
@@ -222,39 +179,21 @@ export async function submitProjectEnquiry(
     };
   }
 
-  try {
-    const result = await sendWithWeb3Forms(enquiry);
+  const accessKey = process.env.WEB3FORMS_ACCESS_KEY;
 
-    if (result.ok) {
-      return {
-        status: "success",
-        message:
-          "Your project details were sent. I will review them and respond with the clearest next step.",
-        errors: {},
-      };
-    }
-
-    if (result.reason === "missing-configuration") {
-      return {
-        status: "error",
-        message:
-          "This form is validated, but Web3Forms is not configured yet. Add WEB3FORMS_ACCESS_KEY in Vercel and try again.",
-        errors: {},
-      };
-    }
-
+  if (!accessKey) {
     return {
       status: "error",
       message:
-        "Web3Forms did not confirm the submission. Please check the access key and try again.",
-      errors: {},
-    };
-  } catch {
-    return {
-      status: "error",
-      message:
-        "The form could not reach Web3Forms. Please try again in a moment.",
+        "This form is validated, but Web3Forms is not configured yet. Add WEB3FORMS_ACCESS_KEY in Vercel and redeploy.",
       errors: {},
     };
   }
+
+  return {
+    status: "idle",
+    message: "",
+    errors: {},
+    web3FormsPayload: buildWeb3FormsPayload(enquiry, accessKey),
+  };
 }
